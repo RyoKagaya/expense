@@ -9,7 +9,7 @@ RATIO経費精算
 
 ## ③DEMO
 
-デプロイしている場合はURLを記入（任意）
+https://ryokagaya.github.io/expense/
 
 ## ④作ったアプリケーション用のIDまたはPasswordがある場合
 
