@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RATIO経費精算</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <h1>RATIO経費精算</h1>
+    </header>
+    <main>
+        <div class="input-items">
+            <div>
+                <label for="title">タイトル</label>
+                <input type="text" id="title" placeholder="例： ⚪︎月経費">
+            </div>
+            <div>
+                <label for="when">日付</label>
+                <input type="date" id="when">
+            </div>
+            <div>
+                <label for="price">金額</label>
+                <input type="number" id="price" placeholder="例： 1,000">
+            </div>
+            <div>
+                <label for="payee">取引先</label>
+                <input type="text" id="payee" placeholder="例: ⚪︎⚪︎株式会社">
+            </div>
+        </div>
+        <div>
+            <label for="file-upload">画像をアップロード</label>
+            <input type="file" id="file-upload" accept="image/*">
+            <div id="image-preview">ここに画像のプレビューが表示されます</div>
+        </div>
+        <div class="action">
+            <ul>
+                <li id="submit" disabled style="background-color: #ccc; color: #666; cursor: not-allowed;">申請</li>
+                <li id="clear">削除</li>
+            </ul>
+        </div>
+        <div>
+            <div class="ratipen-container">
+                <p id="speech-bubble">今日はどんな経費を入力しますか？</p>
+                <img src="img/ratipen.PNG" alt="Ratipenキャラクター">
+            </div>
+        </div>
+    </main>
+    <footer>
+        <div><p>RATIO</p></div>
+    </footer>
+    <!-- JQueryライブラリを読み込む -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- OCRライブラリを読み込む -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js"></script>
+    <script>
+        $(document).ready(function () {
+            const today = new Date();
+            const formattedDate = today.toISOString().split('T')[0]; // 年-月-日形式にフォーマット
+            $('#when').val(formattedDate); // 日付フィールドに設定
+        });
+    
+        // 吹き出しメッセージを更新する関数
+        function updateSpeechBubble(message) {
+            const $speechBubble = $('#speech-bubble');
+            $speechBubble.text(message); // メッセージを設定
+            $speechBubble.css({
+                "color": "#246dc8", // 通常の色
+                "font-weight": "bold"
+            });
+        }
+    
+        // バリデーション関数
+        function validateForm() {
+            let isValid = true;
+    
+            // 各フィールドをチェック
+            $('.input-items input').each(function () {
+                const $input = $(this);
+                if (!$input.val()) { // 値が空の場合
+                    isValid = false;
+                    $input.css({ "border": "2px solid #e74c3c", "background-color": "#fceae9" }); // 赤枠と背景色
+                } else {
+                    $input.css({ "border": "1px solid #ddd", "background-color": "#f9f9f9" }); // 通常色
+                }
+            });
+    
+            // 申請ボタンの有効/無効を切り替え
+            $('#submit').prop('disabled', !isValid);
+            $('#submit').css({
+                "background-color": isValid ? "#246dc8" : "#ccc",
+                "color": isValid ? "#fff" : "#666",
+                "cursor": isValid ? "pointer" : "not-allowed"
+            });
+    
+            return isValid; // フォームの有効性を返す
+        }
+    
+        // 入力フィールドの変更時にバリデーション
+        $('.input-items input').on('input change', function () {
+            validateForm();
+        });
+    
+        // ファイルアップロード時の処理
+        $('#file-upload').on('change', function (event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const imageData = e.target.result;
+    
+                    // プレビュー表示
+                    $('#image-preview').html(`<img src="${imageData}" alt="プレビュー" width="200px">`);
+    
+                    // OCR処理開始
+                    Tesseract.recognize(
+                        imageData,
+                        'jpn', // 日本語で処理
+                        { logger: (info) => console.log(info) }
+                    ).then(({ data: { text } }) => {
+                        console.log("OCR結果:", text);
+    
+                        // OCR結果から推測してフォームに入力
+                        $('#title').val(text.match(/(タイトル|件名|[^\n]+)/)?.[0] || '');
+                        $('#when').val(text.match(/\d{4}-\d{2}-\d{2}/)?.[0] || formattedDate);
+                        $('#price').val(text.match(/\d+(,\d{3})*(円|JPY|¥)?/)?.[0]?.replace(/[^\d]/g, '') || '');
+                        $('#payee').val(text.match(/(株式会社[\u4E00-\u9FAF]+|[\u4E00-\u9FAF]+株式会社)/)?.[0] || '');
+                    });
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    
+        // 申請ボタンの処理
+        $('#submit').on('click', function () {
+            const isValid = validateForm(); // 最終バリデーション
+    
+            if (!isValid) {
+                updateSpeechBubble('全ての項目を入力してください！'); // エラーメッセージ
+                return;
+            }
+    
+            const data = {
+                title: $('#title').val(),
+                when: $('#when').val(),
+                price: $('#price').val(),
+                payee: $('#payee').val(),
+                image: $('#image-preview img').attr('src')
+            };
+    
+            const expenses = JSON.parse(localStorage.getItem('expenses')) || [];
+            expenses.push(data);
+            localStorage.setItem('expenses', JSON.stringify(expenses));
+    
+            updateSpeechBubble('経費が正常に申請されました！'); // 成功メッセージ
+            clearForm(); // フォームをリセット
+        });
+    
+        // リセットボタンの処理
+        $('#clear').on('click', function () {
+            clearForm();
+            updateSpeechBubble('フォームがリセットされました！'); // リセットメッセージ
+        });
+    
+        // フォームリセット関数
+        function clearForm() {
+            const today = new Date().toISOString().split('T')[0];
+            $('#title').val('');
+            $('#when').val(today); // リセット時も今日の日付を設定
+            $('#price').val('');
+            $('#payee').val('');
+            $('#file-upload').val('');
+            $('#image-preview').empty();
+            $('.input-items input').css({ "border": "1px solid #ddd", "background-color": "#f9f9f9" }); // 通常色に戻す
+            validateForm(); // バリデーションを再実行
+        }
+    </script>    
+</body>
+</html>
